@@ -251,6 +251,8 @@ modules:
       - -I../wine/include
       - -I../openvr/headers
       - -lsteam_api
+      - -lshlwapi
+      - -lmsi
       - -lole32
       - -ldl
       - --guiexe
@@ -401,8 +403,8 @@ modules:
       - '*'
     sources:
       - type: archive
-        url: https://github.com/KhronosGroup/glslang/archive/refs/tags/11.2.0.tar.gz
-        sha256: 8ff2fcf9b054e4a4ef56fcd8a637322f827b2b176a592a618d63672ddb896e06
+        url: https://github.com/KhronosGroup/glslang/archive/refs/tags/11.12.0.tar.gz
+        sha256: 7795a97450fecd9779f3d821858fbc2d1a3bf1dd602617d95b685ccbcabc302f
 
 
 # TODO: build vkd3d against cross-compiled Vulkan-Loader instead of Wine vulkan lib
@@ -426,6 +428,7 @@ modules:
       - --disable-demos
       - --without-ncurses
     post-install:
+      - mv -v ${FLATPAK_DEST}/lib/vkd3d/{prefix/bin/,}libvkd3d-1.dll
       - mv -v ${FLATPAK_DEST}/lib/vkd3d/{prefix/bin/,}libvkd3d-shader-1.dll
     sources: &vkd3d-sources
       - *proton_source
@@ -452,6 +455,7 @@ modules:
       prefix: /app/share/steam/compatibilitytools.d/Proton/lib32/vkd3d/prefix
     config-opts: *vkd3d-config-opts
     post-install:
+      - mv -v ${FLATPAK_DEST}/lib32/vkd3d/{prefix/bin/,}libvkd3d-1.dll
       - mv -v ${FLATPAK_DEST}/lib32/vkd3d/{prefix/bin/,}libvkd3d-shader-1.dll
     sources: *vkd3d-sources
     cleanup:
@@ -473,7 +477,6 @@ modules:
     config-opts: &vkd3d-proton-config-opts
       - --buildtype=release
       - --strip
-      - -Denable_d3d12=true
     post-install:
       - cd ${FLATPAK_BUILDER_BUILDDIR}; git submodule status -- vkd3d-proton > ${FLATPAK_DEST}/lib/wine/vkd3d-proton/version
     sources: &vkd3d-proton-sources
@@ -518,7 +521,6 @@ modules:
     config-opts: &dxvk_config_opts
       - --buildtype=release
       - --strip
-      - -Denable_tests=false
       - -Denable_dxgi=true
       - -Denable_d3d9=true
       - -Denable_d3d10=true
@@ -648,15 +650,11 @@ modules:
   - name: fonts
     buildsystem: simple
     build-commands:
-      - |
-        cat <<EOF > Makefile
-        SRCDIR     := $(pwd)
-        BUILD_NAME := proton-flatpak
-        include \$(SRCDIR)/Makefile.in
-        EOF
-      - make fonts
-      - find obj-fonts/ -xtype f \( -name "*.otf" -o -name "*.ttf" \) -ls -exec install
-        -Dm0644 -t ${FLATPAK_DEST}/share/fonts/ {} \;
+      - make -f Makefile.in "CURDIR=$(pwd)" "SRCDIR=$(pwd)" BUILD_NAME=proton-flatpak CONTAINER=1 fonts
+      - >-
+          find obj-fonts/
+          -xtype f \( -name "*.otf" -o -name "*.ttf" \)
+          -ls -exec install -Dm0644 -t ${FLATPAK_DEST}/share/fonts/ {} \;
     sources:
       - *proton_source
     modules:
@@ -731,6 +729,7 @@ modules:
     build-commands:
       - install -Dm755 -t ${FLATPAK_DEST}/ proton filelock.py user_settings.sample.py
       - install -Dm644 -t ${FLATPAK_DEST}/ compatibilitytool.vdf proton_3.7_tracked_files
+      - cat toolmanifest_runtime.vdf | grep -v '"use_sessions"' | grep -v '"require_tool_appid"' | grep -v '"compatmanager_layer_name"' > toolmanifest_noruntime.vdf
       - install -Dm644 toolmanifest_noruntime.vdf ${FLATPAK_DEST}/toolmanifest.vdf
       - install -Dm644 dist.LICENSE ${FLATPAK_DEST}/LICENSE
       - |
